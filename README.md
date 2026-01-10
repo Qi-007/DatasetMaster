@@ -1,6 +1,6 @@
 # DatasetMaster
 
-一款功能强大的目标检测数据集划分与管理工具，支持多种主流数据集格式，提供交互式命令行界面。
+目标检测数据集划分与管理工具，支持多种主流数据集格式，提供交互式命令行界面。
 
 ## 特性
 
@@ -111,26 +111,30 @@ names: ['cat', 'dog', 'bird']  # 类别名称列表
 对于包含额外属性的 OBB 格式（如颜色、大小等），可通过 `format.yaml` 定义：
 
 ```yaml
-format_name: "armor_obb"
-description: "装甲板 OBB 格式"
+# 格式名称（可选）
+format_name: "my_custom_obb"
 
-# 属性字段定义 (按标注文件中的顺序)
+# 格式描述（可选）
+description: "我的自定义 OBB 格式"
+
+# 属性字段定义（按标注文件中的顺序）
 attributes:
   - name: color
     values: ['red', 'blue']
   - name: size
     values: ['small', 'big']
 
-# 类别索引位置 (相对于属性字段之后)
+# 类别索引位置（相对于属性字段之后，默认 0）
 class_position: 0
 
-# 类别配置 (可选)
+# 类别配置（可选，也可使用单独的 classes.yaml）
 classes:
   nc: 8
   names: ['0', '1', '2', '3', '4', '5', 'negative', 'guard']
 ```
+当 `attributes` 不为空时，**标注行格式为**：
 
-标注格式: `<color> <size> <class> <x1> <y1> <x2> <y2> <x3> <y3> <x4> <y4>`
+`<attr1> <attr2> ... <class> <x1> <y1> <x2> <y2> <x3> <y3> <x4> <y4>`
 
 ## 输出结构
 
@@ -195,11 +199,3 @@ config = SplitConfig(train_ratio=0.8, val_ratio=0.1, test_ratio=0.1)
 splitter = DatasetSplitter(dataset_info, config)
 split_result = splitter.execute("/path/to/output")
 ```
-
-## 许可证
-
-MIT License
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
