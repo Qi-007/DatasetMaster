@@ -18,6 +18,7 @@ from .reader import create_reader, DatasetInfo, ClassConfig
 from .validator import DatasetValidator, ValidationResult
 from .splitter import DatasetSplitter, SplitConfig, SplitResult
 from .config import YAMLConfigGenerator
+from .converter import create_converter, ConversionResult
 
 
 # ============================================================================
@@ -330,14 +331,158 @@ def print_final_report(result: SplitResult, format_name: str, output_dir: str, d
     ))
 
 
+def print_conversion_result(result: ConversionResult):
+    """打印转换结果"""
+    console.print()
+
+    if result.success:
+        title = f"{theme.icon_party} 转换完成"
+        border_style = theme.success
+        status_msg = f"[{theme.success}]数据集格式转换成功！[/]"
+    else:
+        title = f"{theme.icon_error} 转换失败"
+        border_style = theme.error
+        status_msg = f"[{theme.error}]转换过程中发生错误[/]"
+
+    class_info = ""
+    if result.class_config:
+        class_info = f"\n{theme.icon_label} 类别数: [cyan]{result.class_config.nc}[/cyan]"
+
+    report_content = f"""
+{status_msg}
+
+{theme.icon_image} 图片数: [cyan]{result.total_images}[/cyan]
+{theme.icon_label} 标注数: [cyan]{result.total_annotations}[/cyan]{class_info}
+
+{theme.icon_save} 输出目录: [underline]{result.output_path}[/underline]
+"""
+
+    console.print(Panel(
+        report_content,
+        title=title,
+        border_style=border_style,
+        title_align="left"
+    ))
+
+    # 显示警告
+    if result.warnings:
+        console.print()
+        for warning in result.warnings:
+            msg_warning(warning)
+
+    # 显示错误
+    if result.errors:
+        console.print()
+        for error in result.errors[:5]:
+            msg_error(error)
+        if len(result.errors) > 5:
+            console.print(f"   ... 还有 {len(result.errors) - 5} 个错误", style=theme.muted)
+
+
 # ============================================================================
 # 主流程
 # ============================================================================
 
-def run_interactive():
-    """运行交互式 CLI"""
-    print_banner()
+def run_convert_workflow():
+    """格式转换工作流"""
+    # 1. 选择源格式
+    source_format = ask(questionary.select(
+        f"{theme.icon_folder} 选择源数据集格式:",
+        choices=[
+            questionary.Choice("COCO - COCO JSON 格式", value=DatasetFormat.COCO),
+            questionary.Choice("Pascal VOC - Pascal VOC XML 格式", value=DatasetFormat.VOC),
+        ],
+        style=theme.questionary_style
+    ))
 
+    # 2. 选择目标格式
+    target_choices = [
+        questionary.Choice("YOLO - 标准 YOLO 检测格式", value=DatasetFormat.YOLO),
+    ]
+    # COCO 支持分割格式转换
+    if source_format == DatasetFormat.COCO:
+        target_choices.append(
+            questionary.Choice("YOLO-Seg - YOLO 实例分割格式", value=DatasetFormat.YOLO_SEG)
+        )
+
+    target_format = ask(questionary.select(
+        f"{theme.icon_folder} 选择目标格式:",
+        choices=target_choices,
+        style=theme.questionary_style
+    ))
+
+    # 3. 选择源数据集目录
+    console.print()
+    if source_format == DatasetFormat.COCO:
+        msg_muted(f"{theme.icon_info} COCO 格式需要 images/ 和 annotations/ 目录")
+    else:
+        msg_muted(f"{theme.icon_info} VOC 格式需要 JPEGImages/ 和 Annotations/ 目录 (或 images/ 和 annotations/)")
+
+    source_path = ask(questionary.path(
+        f"{theme.icon_folder} 请选择源数据集目录:",
+        only_directories=True,
+        style=theme.questionary_style
+    ))
+
+    # 4. 选择输出目录
+    default_output = str(Path(source_path).parent / f"{Path(source_path).name}_yolo")
+    output_path = ask(questionary.path(
+        f"{theme.icon_folder} 请选择输出目录:",
+        default=default_output,
+        style=theme.questionary_style
+    ))
+
+    # 5. 是否复制图片
+    console.print()
+    copy_images = ask(questionary.confirm(
+        f"{theme.icon_image} 是否复制图片到输出目录?",
+        default=True,
+        style=theme.questionary_style
+    ))
+
+    # 6. 确认转换
+    console.print()
+    source_format_name = FORMAT_INFO[source_format].name
+    target_format_name = FORMAT_INFO[target_format].name
+
+    if not ask(questionary.confirm(
+        f"{theme.icon_rocket} 确认将 {source_format_name} 转换为 {target_format_name}?",
+        default=True,
+        style=theme.questionary_style
+    )):
+        raise UserCancelled()
+
+    # 7. 执行转换
+    console.print()
+    msg_step("正在转换格式...")
+
+    try:
+        converter = create_converter(
+            source_format=source_format,
+            target_format=target_format,
+            source_path=source_path,
+            output_path=output_path
+        )
+
+        with Progress(
+            SpinnerColumn(style=theme.primary),
+            TextColumn(f"[{theme.primary}]{{task.description}}[/]"),
+            console=console
+        ) as progress:
+            task = progress.add_task(f"{theme.icon_rocket} 正在转换...", total=None)
+            result = converter.convert(copy_images=copy_images)
+            progress.update(task, description=f"{theme.icon_check} 转换完成!")
+
+        # 8. 显示结果
+        print_conversion_result(result)
+
+    except Exception as e:
+        msg_error(f"转换失败: {e}")
+        return
+
+
+def run_split_workflow():
+    """数据集划分工作流"""
     # 1. 选择数据集格式
     format_choices = [
         questionary.Choice(f"{info.name} - {info.description}", value=fmt)
@@ -567,6 +712,29 @@ def run_interactive():
     # 最终报告
     format_name = FORMAT_INFO[dataset_format].name
     print_final_report(result, format_name, output_dir, dry_run)
+
+
+def run_interactive():
+    """运行交互式 CLI 主菜单"""
+    print_banner()
+
+    # 主功能选择
+    action = ask(questionary.select(
+        f"{theme.icon_rocket} 请选择功能:",
+        choices=[
+            questionary.Choice(f"数据集划分 - 将数据集划分为 train/val/test", value="split"),
+            questionary.Choice(f"格式转换 - 将 COCO/VOC 转换为 YOLO 格式", value="convert"),
+            questionary.Choice(f"退出", value="exit")
+        ],
+        style=theme.questionary_style
+    ))
+
+    if action == "split":
+        run_split_workflow()
+    elif action == "convert":
+        run_convert_workflow()
+    elif action == "exit":
+        raise UserCancelled()
 
 
 def main():

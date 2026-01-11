@@ -5,21 +5,38 @@
 ## 特性
 
 - **多格式支持**: YOLO、YOLO-OBB、YOLO-Seg、COCO、Pascal VOC、自定义 OBB 格式
+- **格式转换**: 支持 COCO/VOC 转换为 YOLO 格式
 - **交互式 CLI**: 美观的命令行界面，引导式操作流程
 - **智能划分**: 支持分层抽样，确保各类别比例一致
 - **数据验证**: 检查标签格式错误、缺失标签、孤立标签、损坏图片
 - **配置生成**: 自动生成 YOLO `data.yaml` 配置文件
 - **灵活配置**: 支持自定义 OBB 格式，通过 YAML 定义属性字段
 
+## 一键运行
+
+```bash
+wget -qO- https://raw.githubusercontent.com/Qi-007/DatasetMaster/main/dataset_master.sh | bash
+```
+
+或者下载脚本后运行：
+
+```bash
+wget https://raw.githubusercontent.com/Qi-007/DatasetMaster/main/dataset_master.sh
+bash dataset_master.sh && rm dataset_master.sh
+```
+
 ## 安装
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-repo/DatasetMaster.git
+git clone https://github.com/Qi-007/DatasetMaster.git
 cd DatasetMaster
 
 # 安装依赖
 pip install -r requirements.txt
+
+# 运行
+python main.py
 ```
 
 ### 依赖
@@ -154,7 +171,7 @@ output/
 ```
 
 ## 划分选项
-
+·
 | 选项 | 说明 |
 |------|------|
 | **划分比例** | 支持 8:1:1、7:2:1、6:2:2 或自定义 |
@@ -198,4 +215,57 @@ result = validator.validate()
 config = SplitConfig(train_ratio=0.8, val_ratio=0.1, test_ratio=0.1)
 splitter = DatasetSplitter(dataset_info, config)
 split_result = splitter.execute("/path/to/output")
+```
+
+## 格式转换
+
+支持将 COCO 和 Pascal VOC 格式转换为 YOLO 格式。
+
+### 支持的转换
+
+| 源格式 | 目标格式 | 说明 |
+|--------|----------|------|
+| COCO | YOLO | 检测框转换 |
+| COCO | YOLO-Seg | 实例分割转换 |
+| Pascal VOC | YOLO | 检测框转换 |
+
+### 坐标转换
+
+**COCO → YOLO:**
+- COCO: `[x, y, width, height]` (左上角 + 宽高，绝对像素)
+- YOLO: `class x_center y_center width height` (中心点 + 宽高，归一化 0-1)
+
+**VOC → YOLO:**
+- VOC: `<xmin><ymin><xmax><ymax>` (左上角 + 右下角，绝对像素)
+- YOLO: `class x_center y_center width height` (中心点 + 宽高，归一化 0-1)
+
+### 转换示例
+
+```python
+from dataset_master import create_converter, DatasetFormat
+
+# 创建转换器
+converter = create_converter(
+    source_format=DatasetFormat.COCO,
+    target_format=DatasetFormat.YOLO,
+    source_path="/path/to/coco_dataset",
+    output_path="/path/to/yolo_output"
+)
+
+# 执行转换
+result = converter.convert(copy_images=True)
+print(f"转换完成: {result.total_images} 张图片, {result.total_annotations} 个标注")
+```
+
+### 转换输出结构
+
+```
+output/
+├── images/
+│   ├── 000001.jpg
+│   └── ...
+├── labels/
+│   ├── 000001.txt
+│   └── ...
+└── classes.yaml
 ```
