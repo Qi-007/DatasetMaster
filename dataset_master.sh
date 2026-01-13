@@ -1,12 +1,5 @@
-#!/bin/bash
+#!/bin/bashm 
 # DatasetMaster 一键运行脚本
-# 用法:
-#   1) 直接运行（在线）:
-#      wget -qO- https://raw.githubusercontent.com/Qi-007/DatasetMaster/main/dataset_master.sh | bash
-#   2) 下载到临时文件运行并自动清理（推荐）:
-#      tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT && wget -4 -qO "$tmp" https://raw.githubusercontent.com/Qi-007/DatasetMaster/main/dataset_master.sh && bash "$tmp"
-#   3) 本地下载后运行并自删:
-#      bash /tmp/dataset_master.sh --cleanup
 
 set -euo pipefail
 
